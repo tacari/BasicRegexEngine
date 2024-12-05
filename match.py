@@ -30,22 +30,22 @@ def match_helper(text, pattern, case_sensitive=True):
     if not pattern:
         return not text  # If pattern is empty, return True only if text is also empty.
 
-    # Adjustment for case-insensitivity 
+    # Adjust for case-insensitivity
     if not case_sensitive:
         text = text.lower()
         pattern = pattern.lower()
 
     # Function to check if the first character matches
     def char_matches(c, p):
-        if p.startswith('[') and ']' in p:  #  [abc] or [a-z]
+        if p.startswith('[') and ']' in p:  # [abc] or [a-z]
             end = p.index(']')
             chars = set()
             i = 1
             while i < end:
-                if i + 2 < end and p[i + 1] == '-':  # [a-z]
+                if i + 2 < end and p[i + 1] == '-':  # Handle ranges like [a-z]
                     chars.update(chr(x) for x in range(ord(p[i]), ord(p[i + 2]) + 1))
                     i += 3
-                else:  # Adds individual characters 
+                else:  # Add individual characters 
                     chars.add(p[i])
                     i += 1
             return c in chars, p[end + 1:]  # Return match status and remaining pattern
@@ -70,10 +70,15 @@ def match_helper(text, pattern, case_sensitive=True):
 def match(text, pattern, case_sensitive=True):
     """
     Wrapper function to validate the pattern and invoke the matching logic.
-    - Ensures pattern correctness before matching.
+    - Supports partial matching.
     """
     validate_pattern(pattern)  # Validate the pattern for syntax errors
-    return match_helper(text, pattern, case_sensitive)
+
+    # Iterate over the text to find partial matches
+    for i in range(len(text) + 1):
+        if match_helper(text[i:], pattern, case_sensitive):
+            return True
+    return False
 
 def count_matches(text, pattern, case_sensitive=True):
     """

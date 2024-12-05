@@ -17,14 +17,14 @@ def validate_pattern(pattern):
         raise ValueError("Unbalanced brackets in pattern.")
     return True
 
-@lru_cache(None)  # Memoization 
+@lru_cache(None)  # Cache results to optimize repeated calls
 def match_helper(text, pattern, case_sensitive=True):
     """
     Recursive helper function for matching text against a pattern.
     Supports:
     - Wildcard '.' (matches any character).
     - Quantifiers '*' (0 or more), '+' (1 or more), '?' (0 or 1).
-    - Character classes '[abc]', ranges '[a-z]'.
+    - Character classes '[abc]', ranges '[a-z]', and negated classes '[^...]'.
     - Case-sensitive matching based on a parameter.
     """
     if not pattern:
@@ -37,20 +37,22 @@ def match_helper(text, pattern, case_sensitive=True):
 
     # Function to check if the first character matches
     def char_matches(c, p):
-        if p.startswith('[') and ']' in p:  # [abc] or [a-z]
+        if p.startswith('[') and ']' in p:  # Handle [abc], [a-z], or [^abc]
             end = p.index(']')
+            negate = p[1] == '^'  # Check if the class starts with '^'
             chars = set()
-            i = 1
+            i = 2 if negate else 1  # Start after '^' if present, otherwise after '['
             while i < end:
-                if i + 2 < end and p[i + 1] == '-':  # Handle ranges like [a-z]
+                if i + 2 < end and p[i + 1] == '-':  # Handle ranges like a-z
                     chars.update(chr(x) for x in range(ord(p[i]), ord(p[i + 2]) + 1))
                     i += 3
-                else:  # Add individual characters 
+                else:  # Add single characters
                     chars.add(p[i])
                     i += 1
-            return c in chars, p[end + 1:]  # Return match status and remaining pattern
-        return c == p or p == '.', p[1:]  # Match direct character or '.' wildcard
+            return (c not in chars if negate else c in chars), p[end + 1:]  # Negate logic for [^...]
+        return c == p or p == '.', p[1:]  # Match exact character or '.' wildcard
 
+    # Check if the first character matches
     first_match, remaining_pattern = char_matches(text[0] if text else '', pattern)
 
     # Handle quantifiers
@@ -67,28 +69,24 @@ def match_helper(text, pattern, case_sensitive=True):
     # Continue matching without quantifiers
     return first_match and match_helper(text[1:], remaining_pattern, case_sensitive)
 
-def match(text, pattern, case_sensitive=True):
+def match_single_char(text, pattern, case_sensitive=True):
     """
-    Wrapper function to validate the pattern and invoke the matching logic.
-    - Supports partial matching.
+    Matches the first character of the text against the pattern.
+    Returns True if the first character matches, False otherwise.
     """
-    validate_pattern(pattern)  # Validate the pattern for syntax errors
-
-    # Iterate over the text to find partial matches
-    for i in range(len(text) + 1):
-        if match_helper(text[i:], pattern, case_sensitive):
-            return True
-    return False
+    validate_pattern(pattern)  # Validate the pattern
+    if not text:
+        return False
+    return match_helper(text[0], pattern, case_sensitive)
 
 def count_matches(text, pattern, case_sensitive=True):
     """
-    Count the number of times the pattern matches within the text.
-    - Iterates through the text, checking for matches starting at each position.
+    Count the number of times the pattern matches individual characters in the text.
     """
-    validate_pattern(pattern)  # Validate the pattern for syntax errors
+    validate_pattern(pattern)  # Validate the pattern
     matches = 0
-    for i in range(len(text)):
-        if match(text[i:], pattern, case_sensitive):  # Check if a match starts at position i
+    for i in range(len(text)):  # Check each character in the text
+        if match_single_char(text[i:], pattern, case_sensitive):
             matches += 1
     return matches
 
@@ -101,7 +99,7 @@ def interactive_regex_matcher():
     - Displays match results and count of matches.
     """
     print("Welcome to the Regex Matcher!")
-    print("Supports: '.', '*', '+', '?', '[abc]', '[a-z]', case sensitivity, and anchors ('^', '$').")
+    print("Supports: '.', '*', '+', '?', '[abc]', '[a-z]', '[^abc]', case sensitivity, and anchors ('^', '$').")
     print("Type 'exit' to quit.")
 
     while True:
@@ -122,8 +120,8 @@ def interactive_regex_matcher():
             count = count_matches(text, pattern, case_sensitive)
             print(f"\nPattern matches found: {count}")
 
-            # Full match check
-            if match(text, pattern, case_sensitive):
+            # Check if there are any matches
+            if count > 0:
                 print("The text matches the pattern.")
             else:
                 print("The text does not match the pattern.")
